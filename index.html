@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Studio | WebGPU Compute & JS</title>
+    <style>
+        body {
+            background-color: #050505;
+            color: #c9d1d9;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+            margin: 0;
+            display: flex;
+            flex-direction: row; 
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* --- Canvas Section --- */
+        #canvas-container {
+            flex: 1.2; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            border-right: 2px solid #30363d;
+        }
+
+        canvas {
+            width: 90%;
+            height: auto;
+            border: 1px solid #30363d;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+            background-color: #000;
+        }
+
+        .canvas-controls { margin-top: 15px; }
+
+        /* --- Right Panel Layout --- */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #editor-wrapper {
+            flex: 1; 
+            display: flex;
+            flex-direction: column;
+            background: #0d1117;
+            border-bottom: 2px solid #30363d;
+            min-height: 0;
+        }
+
+        .section-header {
+            flex-shrink: 0;
+            background: #161b22;
+            padding: 10px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8b949e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #30363d;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        /* --- Tab System Styles --- */
+        .tabs-container {
+            display: flex;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .tab-btn {
+            background: transparent;
+            color: #8b949e;
+            border: none;
+            padding: 10px 20px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-right: 1px solid #30363d;
+            border-radius: 0;
+        }
+
+        .tab-btn.active {
+            background: #0d1117;
+            color: #7ee787;
+            border-bottom: 2px solid #7ee787;
+        }
+
+        #filename-input {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #7ee787;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            width: 120px;
+            outline: none;
+        }
+
+        .editor-container {
+            display: none; 
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .editor-container.active {
+            display: flex;
+        }
+
+        .line-numbers {
+            width: 45px;
+            background: #0d1117;
+            color: #484f58;
+            padding: 15px 5px;
+            text-align: right;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            user-select: none;
+            border-right: 1px solid #30363d;
+            overflow: hidden;
+        }
+
+        textarea {
+            flex: 1;
+            background: transparent;
+            color: #d2a8ff;
+            border: none;
+            padding: 15px;
+            font-family: 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        .js-color {
+            color: #ffad66;
+        }
+
+        /* --- Collapsible Terminal --- */
+        #terminal-wrapper {
+            flex: 0 0 30%;
+            display: flex;
+            flex-direction: column;
+            background: #010409;
+            overflow: hidden;
+            transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 40px; 
+        }
+
+        #terminal-wrapper.minimized {
+            flex: 0 0 40px; 
+        }
+
+        #terminal { 
+            flex: 1; 
+            padding: 10px;
+            overflow-y: auto; 
+            font-size: 0.8rem; 
+            background: #050505;
+        }
+
+        /* --- UI Components --- */
+        .button-group { display: flex; gap: 8px; }
+        button {
+            background: #30363d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.7rem;
+            white-space: nowrap;
+        }
+        
+        button:hover { background: #484f58; }
+        button.playing-state { background: #8957e5; }
+        button.paused-state { background: #238636; }
+        button#runBtn { background: #238636; }
+
+        .log-entry { display: flex; margin-bottom: 4px; padding-left: 8px; font-family: monospace; border-left: 3px solid transparent; }
+        .time { color: #484f58; margin-right: 10px; font-size: 0.7rem; }
+        .error { color: #ff7b72; border-left-color: #ff7b72; background: rgba(255, 123, 114, 0.1); }
+        .update { color: #7ee787; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="shaderCanvas" width="720" height="360"></canvas>
+        <div class="canvas-controls">
+            <button id="pausePlayBtn" class="playing-state" onclick="togglePause()">Pause (Alt+S)</button>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div id="editor-wrapper">
+            <div class="section-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span>File:</span>
+                    <input type="text" id="filename-input" value="my_compute_shader">
+                </div>
+                <div class="button-group">
+                    <button onclick="openFile()">Open (Alt+J)</button>
+                    <button style="background: #1f6feb;" onclick="downloadTxt()">Save .txt (Alt+K)</button>
+                    <button onclick="exportFullHtml()">Export HTML (Alt+L)</button>
+                    <button id="runBtn" onclick="compileAndRun()">Run Ecosystem (Alt+Enter)</button>
+                </div>
+            </div>
+
+            <div class="tabs-container">
+                <button class="tab-btn active" onclick="switchTab('wgsl')">compute.wgsl</button>
+                <button class="tab-btn" onclick="switchTab('js')">host_setup.js</button>
+            </div>
+
+            <div id="wgsl-container" class="editor-container active">
+                <div id="wgsl-line-numbers" class="line-numbers"></div>
+                <textarea id="shaderEditor" spellcheck="false" oninput="updateLineNumbers('wgsl')" onscroll="syncScroll('wgsl')">struct Uniforms {
+    u_time: f32,
+    u_resolution: vec2<f32>,
+};
+
+struct PixelMemory {
+    data: vec4<f32>,
+};
+
+@group(0) @binding(0) var outTexture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(1) var<uniform> uniforms: Uniforms;
+
+// FIELD 2: The Structured Read-Write Storage Buffer
+@group(0) @binding(2) var<storage, read_write> customBuffer: array<PixelMemory>;
+
+// FIELD 3: The Bit-Packed Read-Write Texture 
+@group(0) @binding(3) var rwTexture: texture_storage_2d<r32float, read_write>;
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let size = textureDimensions(outTexture);
+    if (id.x >= size.x || id.y >= size.y) { return; }
+
+    // Map 2D coordinates to a 1D index for the Storage Buffer
+    let bufferIndex = id.y * size.x + id.x;
+
+    // -------------------------------------------------------------
+    // 1. READ FROM BOTH MEMORY FIELDS
+    // -------------------------------------------------------------
+    // Read structured data from the buffer
+    let buffer_history = customBuffer[bufferIndex].data;
+
+    // Read pixel data from the single-channel texture and unpack it
+    let raw_bits = textureLoad(rwTexture, id.xy).x;
+    let texture_history = unpack4x8unorm(bitcast<u32>(raw_bits));
+
+    // -------------------------------------------------------------
+    // 2. RUN RUNTIME MATH / BLENDING LOGIC
+    // -------------------------------------------------------------
+    let uv = vec2<f32>(id.xy) / uniforms.u_resolution;
+    
+    // Mix the historical data fields together with some runtime sinusoids
+    let r = 0.5 + 0.5 * cos(uniforms.u_time + uv.x + buffer_history.r);
+    let g = 0.5 + 0.5 * sin(uniforms.u_time + uv.y + texture_history.g);
+    let b = texture_history.b * 0.95 + 0.05 * cos(uniforms.u_time);
+    
+    let runtime_calculated_color = vec4<f32>(r, g, b, 1.0);
+
+    // -------------------------------------------------------------
+    // 3. WRITE BACK TO ALL FIELDS
+    // -------------------------------------------------------------
+    // Write data back to the Storage Buffer
+    customBuffer[bufferIndex].data = runtime_calculated_color * 0.99;
+
+    // Pack color and write it back to the single-channel RW Texture
+    let packed_bits = bitcast<f32>(pack4x8unorm(runtime_calculated_color));
+    textureStore(rwTexture, id.xy, vec4<f32>(packed_bits, 0.0, 0.0, 0.0));
+
+    // Ship the final image composition out to the master pipeline display texture
+    textureStore(outTexture, id.xy, runtime_calculated_color);
+}</textarea>
+            </div>
+
+            <div id="js-container" class="editor-container">
+                <div id="js-line-numbers" class="line-numbers"></div>
+                <textarea id="jsEditor" class="js-color" spellcheck="false" oninput="updateLineNumbers('js')" onscroll="syncScroll('js')">// Dynamic JavaScript Setup Ecosystem
+
+// Field 1: Master Display Texture (Write-Only)
+storageTexture = device.createTexture({
+    size: [canvas.width, canvas.height, 1],
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+});
+
+// Field 2: Custom Structured Memory Buffer (Read-Write Storage)
+const totalPixels = canvas.width * canvas.height;
+customStorageBuffer = device.createBuffer({
+    size: totalPixels * 16, // 16 bytes per vec4 element
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+});
+
+// Field 3: True Read-Write Texture (Read-Write Storage Texture via r32float)
+rwScratchTexture = device.createTexture({
+    size: [canvas.width, canvas.height, 1],
+    format: 'r32float', 
+    usage: GPUTextureUsage.STORAGE_BINDING
+});
+
+// Uniforms
+uniformBuffer = device.createBuffer({
+    size: 16,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+});
+
+// Pipeline (Auto-reflects all 4 bindings from your shader automatically)
+computePipeline = device.createComputePipeline({
+    layout: 'auto',
+    compute: { module: shaderModule, entryPoint: 'main' }
+});
+
+// Bind all 4 fields cleanly into one single group
+computeBindGroup = device.createBindGroup({
+    layout: computePipeline.getBindGroupLayout(0),
+    entries: [
+        { binding: 0, resource: storageTexture.createView() },   // Out Screen
+        { binding: 1, resource: { buffer: uniformBuffer } },      // Uniforms
+        { binding: 2, resource: { buffer: customStorageBuffer } },// Structured Buffer
+        { binding: 3, resource: rwScratchTexture.createView() }  // Pack/Unpack RW Texture
+    ]
+});
+
+renderBindGroup = device.createBindGroup({
+    layout: renderPipeline.getBindGroupLayout(0),
+    entries: [
+        { binding: 0, resource: blitSampler },
+        { binding: 1, resource: storageTexture.createView() }
+    ]
+});
+
+console.update('status', "Multi-field GPU Storage Ecosystem allocated locally!");</textarea>
+            </div>
+        </div>
+
+        <div id="terminal-wrapper">
+            <div class="section-header" onclick="toggleTerminal()" style="cursor: pointer;">
+                <span>System Output</span>
+                <span id="term-status-icon">▼</span>
+            </div>
+            <div id="terminal"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('shaderCanvas');
+        const editor = document.getElementById('shaderEditor');
+        const jsEditor = document.getElementById('jsEditor');
+        const terminal = document.getElementById('terminal');
+        const pausePlayBtn = document.getElementById('pausePlayBtn');
+        const filenameInput = document.getElementById('filename-input');
+        const termWrapper = document.getElementById('terminal-wrapper');
+        const termIcon = document.getElementById('term-status-icon');
+        
+        let adapter, device, context, canvasFormat;
+        let computePipeline, computeBindGroup, uniformBuffer, storageTexture;
+        let renderPipeline, renderBindGroup, blitSampler;
+        let animationId;
+        let isPaused = false;
+        let startTime = performance.now();
+        let pausedAt = 0;
+        let totalPausedTime = 0;
+        let lastFrameTime = 0;
+        let fps = 0;
+
+        const registry = new Map();
+
+        /* --- Tab Manager --- */
+        function switchTab(tabType) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.editor-container').forEach(cont => cont.classList.remove('active'));
+
+            if (tabType === 'wgsl') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('wgsl-container').classList.add('active');
+                updateLineNumbers('wgsl');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('js-container').classList.add('active');
+                updateLineNumbers('js');
+            }
+        }
+
+        function toggleTerminal() {
+            termWrapper.classList.toggle('minimized');
+            termIcon.textContent = termWrapper.classList.contains('minimized') ? '▲' : '▼';
+        }
+
+        // Modified renderToUI to clear logging locks on successful validation loops
+        function renderToUI(key, message, level = 'log') {
+            if (level === 'error' && termWrapper.classList.contains('minimized')) toggleTerminal();
+            if (key && registry.has(key)) {
+                const existing = registry.get(key);
+                const contentSpan = existing.querySelector('.content');
+                if (contentSpan) contentSpan.textContent = message;
+            } else {
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${level}`;
+                entry.innerHTML = `<span class="time">[${performance.now().toFixed(0)}ms]</span><span class="content">${message}</span>`;
+                terminal.appendChild(entry);
+                if (key) registry.set(key, entry);
+            }
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        console.log = (...args) => renderToUI(null, args.join(' '), 'log');
+        console.error = (...args) => renderToUI(null, args.join(' '), 'error');
+        console.update = (id, msg) => renderToUI(id, msg, 'update');
+
+        function syncScroll(type) { 
+            if(type === 'wgsl') document.getElementById('wgsl-line-numbers').scrollTop = editor.scrollTop;
+            if(type === 'js') document.getElementById('js-line-numbers').scrollTop = jsEditor.scrollTop;
+        }
+        
+        function updateLineNumbers(type) {
+            if (type === 'wgsl') {
+                const lines = editor.value.split('\n');
+                document.getElementById('wgsl-line-numbers').innerHTML = lines.map((_, i) => i + 1).join('<br>');
+                syncScroll('wgsl');
+            } else {
+                const lines = jsEditor.value.split('\n');
+                document.getElementById('js-line-numbers').innerHTML = lines.map((_, i) => i + 1).join('<br>');
+                syncScroll('js');
+            }
+        }
+
+        function downloadTxt() {
+            const fileName = (filenameInput.value || 'shader') + '_bundle.txt';
+            const bundledText = `=== WGSL SHADER ===\n${editor.value}\n\n=== JAVASCRIPT ECOSYSTEM ===\n${jsEditor.value}`;
+            const blob = new Blob([bundledText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.update('status', `Bundle Saved: ${fileName}`);
+        }
+
+        function exportFullHtml() {
+            const fileName = (filenameInput.value || 'ShaderProject') + '.html';
+            const docClone = document.documentElement.cloneNode(true);
+            
+            docClone.querySelector('#shaderEditor').textContent = editor.value; 
+            docClone.querySelector('#jsEditor').textContent = jsEditor.value; 
+
+            const content = "<!DOCTYPE html>\n" + docClone.outerHTML;
+            const blob = new Blob([content], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.update('status', "Complete IDE State Exported as HTML");
+        }
+
+        function openFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.html';
+            input.onchange = async e => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const text = await file.text();
+                filenameInput.value = file.name.replace(/\.[^/.]+$/, "");
+                
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, 'text/html');
+                const savedEditor = doc.getElementById('shaderEditor');
+                const savedJSEditor = doc.getElementById('jsEditor');
+                
+                if (savedEditor) editor.value = savedEditor.value;
+                if (savedJSEditor) jsEditor.value = savedJSEditor.value;
+                
+                updateLineNumbers('wgsl');
+                updateLineNumbers('js');
+                compileAndRun();
+            };
+            input.click();
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            pausePlayBtn.className = isPaused ? 'paused-state' : 'playing-state';
+            pausePlayBtn.textContent = isPaused ? "Play (Alt+S)" : "Pause (Alt+S)";
+            if (isPaused) { pausedAt = performance.now(); } 
+            else { 
+                totalPausedTime += (performance.now() - pausedAt); 
+                lastFrameTime = 0;
+                requestAnimationFrame(renderLoop); 
+            }
+        }
+
+        async function initWebGPU() {
+            if (!navigator.gpu) {
+                console.error("WebGPU is not supported on this browser context.");
+                return false;
+            }
+            adapter = await navigator.gpu.requestAdapter();
+            device = await adapter.requestDevice();
+            
+            context = canvas.getContext('webgpu');
+            canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device: device,
+                format: canvasFormat,
+                usage: GPUTextureUsage.RENDER_ATTACHMENT,
+                alphaMode: 'opaque'
+            });
+
+            const blitShaderModule = device.createShaderModule({
+                code: `
+                    @group(0) @binding(0) var srcSampler: sampler;
+                    @group(0) @binding(1) var srcTexture: texture_2d<f32>;
+
+                    struct VertexOutput {
+                        @builtin(position) position: vec4<f32>,
+                        @location(0) uv: vec2<f32>,
+                    };
+
+                    @vertex
+                    fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+                        var pos = array<vec2<f32>, 3>(
+                            vec2<f32>(-1.0, -1.0), vec2<f32>( 3.0, -1.0), vec2<f32>(-1.0,  3.0)
+                        );
+                        var uv = array<vec2<f32>, 3>(
+                            vec2<f32>(0.0, 1.0), vec2<f32>(2.0, 1.0), vec2<f32>(0.0, -1.0)
+                        );
+                        var output: VertexOutput;
+                        output.position = vec4<f32>(pos[vertexIndex], 0.0, 1.0);
+                        output.uv = uv[vertexIndex];
+                        return output;
+                    }
+
+                    @fragment
+                    fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+                        return textureSample(srcTexture, srcSampler, input.uv);
+                    }
+                `
+            });
+
+            renderPipeline = device.createRenderPipeline({
+                layout: 'auto',
+                vertex: { module: blitShaderModule, entryPoint: 'vs_main' },
+                fragment: {
+                    module: blitShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{ format: canvasFormat }]
+                },
+                primitive: { topology: 'triangle-list' }
+            });
+
+            blitSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+            return true;
+        }
+
+        async function compileAndRun() {
+            if (!device) return;
+            if (animationId) cancelAnimationFrame(animationId);
+
+            let shaderCode = editor.value.trim();
+
+            device.pushErrorScope('validation');
+            const shaderModule = device.createShaderModule({ code: shaderCode });
+            const errorScope = await device.popErrorScope();
+
+            if (errorScope) {
+                console.error("WGSL COMPILE ERROR: " + errorScope.message);
+                const compInfo = await shaderModule.getCompilationInfo();
+                for (let msg of compInfo.messages) {
+                    console.error(`Line ${msg.lineNum}:${msg.linePos} - ${msg.message}`);
+                }
+                return;
+            }
+
+            try {
+                const customJsSetup = jsEditor.value;
+                const runCustomSetup = new Function('device', 'canvas', 'shaderModule', 'renderPipeline', 'blitSampler', customJsSetup);
+                runCustomSetup(device, canvas, shaderModule, renderPipeline, blitSampler);
+
+                startTime = performance.now();
+                totalPausedTime = 0;
+                isPaused = false;
+                lastFrameTime = 0;
+                
+                requestAnimationFrame(renderLoop);
+            } catch (jsErr) {
+                console.error("JAVASCRIPT SETUP RUNTIME ERROR: " + jsErr.message);
+            }
+        }
+
+        function renderLoop(now) {
+            if (isPaused) return;
+
+            if (lastFrameTime > 0) {
+                const delta = now - lastFrameTime;
+                fps = (fps * 0.9) + ((1000 / delta) * 0.1);
+            }
+            lastFrameTime = now;
+
+            const time = (now - startTime - totalPausedTime) * 0.001;
+            
+            if (uniformBuffer) {
+                const uniformData = new Float32Array(4);
+                uniformData[0] = time;              
+                uniformData[1] = 0.0;               
+                uniformData[2] = canvas.width;       
+                uniformData[3] = canvas.height;      
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData.buffer);
+            }
+
+            const commandEncoder = device.createCommandEncoder();
+            
+            const computePass = commandEncoder.beginComputePass();
+            computePass.setPipeline(computePipeline);
+            computePass.setBindGroup(0, computeBindGroup);
+            const workgroupCountX = Math.ceil(canvas.width / 16);
+            const workgroupCountY = Math.ceil(canvas.height / 16);
+            computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+            computePass.end();
+
+            const renderPass = commandEncoder.beginRenderPass({
+                colorAttachments: [{
+                    view: context.getCurrentTexture().createView(),
+                    clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                    loadOp: 'clear', storeOp: 'store'
+                }]
+            });
+            renderPass.setPipeline(renderPipeline);
+            renderPass.setBindGroup(0, renderBindGroup);
+            renderPass.draw(3); 
+            renderPass.end();
+
+            device.queue.submit([commandEncoder.finish()]);
+            
+            console.update('gpu-stats', 
+                `Time: ${time.toFixed(2)}s | FPS: ${Math.round(fps)}hz | ` +
+                `canvas.width = ${canvas.width}, canvas.height = ${canvas.height}, ` +
+                `groupID X = ${workgroupCountX}, groupID Y = ${workgroupCountY}`
+            );
+            
+            animationId = requestAnimationFrame(renderLoop);
+        }
+
+        function applyTabInteractions(textareaElement, typeString) {
+            textareaElement.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = this.selectionStart;
+                    this.value = this.value.substring(0, start) + "    " + this.value.substring(this.selectionEnd);
+                    this.selectionStart = this.selectionEnd = start + 4;
+                    updateLineNumbers(typeString);
+                }
+            });
+        }
+        applyTabInteractions(editor, 'wgsl');
+        applyTabInteractions(jsEditor, 'js');
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { editor.blur(); jsEditor.blur(); }
+            if (e.altKey && e.key === 'Enter') compileAndRun();
+            if (e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); togglePause(); }
+            if (e.altKey && e.key.toLowerCase() === 'j') { e.preventDefault(); openFile(); }
+            if (e.altKey && e.key.toLowerCase() === 'l') { e.preventDefault(); exportFullHtml(); }
+            if (e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); downloadTxt(); }
+        });
+
+        updateLineNumbers('wgsl');
+        updateLineNumbers('js');
+        
+        initWebGPU().then(success => {
+            if (success) compileAndRun();
+        });
+    </script>
+</body>
+</html>

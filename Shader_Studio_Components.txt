@@ -1,0 +1,42 @@
+SHADER STUDIO: ISOLATED COMPONENTS LIST
+========================================
+
+I. STRUCTURAL UI COMPONENTS (HTML/CSS)
+--------------------------------------
+1. Layout Shell: Flex-box parent container managing workspace split.
+2. Preview Stage: Dedicated container for visual output isolation.
+3. WebGL2 Canvas Node: Hardware-accelerated drawing surface.
+4. Playback Button: State-aware toggle for simulation control.
+5. Toolbar Header: Container for file metadata and actions.
+6. Filename Text Input: Form element for dynamic file naming.
+7. Action Button Cluster: Command triggers (Open, Save, Export, Run).
+8. Dual-Pane Editor Container: Layout wrapper for code and gutter.
+9. Gutter (Line Numbers): Vertical numeric display column.
+10. Code Input (Textarea): Raw text entry field for GLSL.
+11. Terminal Drawer: Collapsible container for system output.
+12. Terminal Status Bar: Interactive header for terminal toggling.
+13. Log Stream Container: Scrollable area for message appending.
+
+II. TECHNICAL GRAPHICS COMPONENTS (WEBGL)
+------------------------------------------
+14. Vertex Shader Source: Static GLSL script for geometry definition.
+15. Fragment Shader Template: Initial dynamic GLSL code block.
+16. GPU Program Object: Compiled binary executable on the GPU.
+17. Vertex Buffer (VBO): GPU memory allocation for quad geometry.
+18. Vertex Attribute Pointer: Data layout definition for coordinates.
+19. Uniform Slots: Memory addresses for time and resolution data.
+
+III. FUNCTIONAL LOGIC MODULES (JAVASCRIPT)
+------------------------------------------
+20. Registry Map: Data structure for log lookup and persistence.
+21. Log Entry Factory: DOM generation module for terminal entries.
+22. Shader Compiler Utility: GLSL error-handling and compilation logic.
+23. Line Number Generator: String-to-index calculation logic.
+24. Tab-Key Interceptor: Textarea string manipulation module.
+25. Hotkeys Map: Event listener configuration for Alt-commands.
+26. Blob Generator: Logic for file format conversion and export.
+27. HTML Project Cloner: Serialization routine for standalone exports.
+28. File Parser: Asynchronous module for external file reading.
+29. Time Accumulator: Pause-aware temporal calculation system.
+30. FPS Estimator: Frame-frequency estimation module.
+31. Render Loop Engine: Recursive frame-request driver.
